@@ -33,3 +33,6 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .link { border: none; background: none; color: var(--brand); cursor: pointer; padding: 0; }
 .page-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .error-text { color: #b42318; }
+.ok-text { color: #067647; }
+.account-switch { border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 13px; background: #fff; color: #1f2937; }
+.link:disabled { color: #94a3b8; cursor: not-allowed; }

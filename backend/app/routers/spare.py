@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 
+from app.identity import OPERATOR_HEADER, resolve_operator
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.spare import SpareService
 
@@ -40,19 +41,30 @@ def get_entry(entry_id: int) -> dict:
 
 
 @router.post("", response_model=ActionResult)
-def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条器材领用单，缺字段时说明原因而不是静默丢弃。"""
-    entry, missing = service.create_entry(payload.values)
+def create_entry(
+    payload: EntryPayload,
+    x_operator: str | None = Header(default=None, alias=OPERATOR_HEADER),
+) -> ActionResult:
+    """登记一条器材领用单，缺字段或跨工区登记时说明原因而不是静默丢弃。"""
+    operator = resolve_operator(x_operator)
+    entry, missing, note = service.create_entry(payload.values, operator)
     if missing:
         return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
-    return ActionResult(ok=True, message="器材领用单已登记", entry=entry)
+    if entry is None:
+        return ActionResult(ok=False, message=note or "器材领用单登记被拒绝")
+    return ActionResult(ok=True, message=note or "器材领用单已登记", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
-def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条器材领用单执行批准领用、确认发放、退回器材；不允许的动作会被拦下并说明原因。"""
+def run_action(
+    entry_id: int,
+    payload: EntryPayload,
+    x_operator: str | None = Header(default=None, alias=OPERATOR_HEADER),
+) -> ActionResult:
+    """对单条器材领用单执行批准领用、确认发放、退回器材；跨工区改动会被拦下并说明原因。"""
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    operator = resolve_operator(x_operator)
+    entry, message = service.run_action(entry_id, action, operator)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
