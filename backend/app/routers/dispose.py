@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/dispose", tags=["故障处置"])
 
 service = DisposeService()
 
-LIST_FIELDS = ["处置单号", "关联故障", "处置措施", "更换器材", "处置人员", "完成时间", "验收人员", "处置状态"]
+LIST_FIELDS = ["处置单号", "关联故障", "处置措施", "更换器材", "处置人员", "完成时间", "验收人员", "所属工区", "处置状态"]
 STATUSES = ["待受理", "处置中", "待验收", "已验收"]
 
 
@@ -41,18 +41,18 @@ def get_entry(entry_id: int) -> dict:
 
 @router.post("", response_model=ActionResult)
 def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条处置单，缺字段时说明原因而不是静默丢弃。"""
-    entry, missing = service.create_entry(payload.values)
-    if missing:
-        return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
+    """登记一条处置单，缺字段或单号重复时说明原因而不是静默丢弃。"""
+    entry, problems = service.create_entry(payload.values)
+    if problems:
+        return ActionResult(ok=False, message="；".join(problems))
     return ActionResult(ok=True, message="处置单已登记", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条处置单执行受理处置、提交验收、确认验收；不允许的动作会被拦下并说明原因。"""
+    """对单条处置单执行动作：受理处置照旧；提交验收、确认验收要过归属校验，越权或重复提交会说明原因后拒绝。"""
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    entry, message = service.run_action(entry_id, action, payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
